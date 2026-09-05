@@ -1,5 +1,12 @@
-*.tex
-*.txt
-*.json
-*.md
 output/
+*.o
+parser_output.md
+parser_output.json
+
+node_modules/
+
+.env
+.env.local
+.DS_Store
+Thumbs.db
+/tmp/
