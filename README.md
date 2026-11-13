@@ -1,117 +1,85 @@
-# LaTeX to Markdown Compiler
+# TeXdown
 
-Converts LaTeX documents into Markdown. A C compiler does the parsing and
-translation; a TypeScript/Express microservice wraps it and exposes it over
-HTTP.
+**TeXdown** is a LaTeX-to-Markdown compiler written in C, with its own lexer, parser, macro expander and serializer, served over HTTP by a TypeScript/Express microservice.
 
-## How it works
+Feed it this:
 
-```
-HTTP request → Express route → spawn(latex_compiler) → stdout → JSON response
-```
-
-The C compiler runs as a single-purpose pipeline:
-
-1. **Lexer** (`lexer.c`) — tokenizes raw LaTeX into commands, braces,
-   brackets, and text.
-2. **Parser** (`parser.c`) — builds an AST of commands, groups, and
-   environments from the token stream.
-3. **Macro expander** (`expand.c`) — resolves `\newcommand` definitions
-   (0–9 parameters) inside the `document` environment, up to 256
-   substitutions per run. Beyond that limit it leaves the macro unexpanded
-   and prints a warning, so a cyclic definition can't hang the process.
-4. **Serializer** (`serializer.c`) — walks the AST and writes Markdown.
-
-The Node service reads the request body, writes `latexContent` to the
-compiler's stdin, and reads the resulting Markdown back from stdout. It does
-not read or write any file on disk.
-
-## Supported LaTeX
-
-| LaTeX | Markdown |
-| --- | --- |
-| `\section{}`, `\ressection{}` | `## ` heading |
-| `\subsection{}` | `### ` heading |
-| `\textbf{}` | `**bold**` |
-| `\textit{}` | `*italic*` |
-| `\href{url}{text}` | `[text](url)` |
-| `itemize`, `enumerate` | `- ` list (both render as bullets, not numbers) |
-| `\\` | hard line break |
-| `\hfill` | em dash |
-| `\vspace`, `\hspace`, `\centering`, `\label`, and other layout-only commands | dropped |
-
-Only content inside `\begin{document}...\end{document}` is emitted; if no
-`document` environment is present, the compiler falls back to serializing
-the whole input. Any command not listed above renders generically as
-`**[\commandname]** arg1 — arg2` so nothing silently disappears, but the
-output won't be idiomatic Markdown.
-
-`\ressection` behaves exactly like `\section` but can't be redefined with
-`\newcommand`, so a document can't accidentally break its own section
-headings while defining other macros.
-
-## Project structure
-
-```
-├── include/
-│   └── latex_compiler.h     # shared types for the C compiler
-├── src/
-│   ├── c_compiler/
-│   │   ├── main.c           # reads stdin, runs the pipeline, writes stdout
-│   │   ├── lexer.c
-│   │   ├── parser.c
-│   │   ├── expand.c
-│   │   └── serializer.c
-│   ├── server.ts            # Express app and /api/parse route
-│   ├── compiler.ts          # spawns the compiler binary, handles its process lifecycle
-│   └── types.ts             # shared request/response/config types
-├── Makefile
-├── package.json
-├── tsconfig.json
-└── run.sh                   # clean, install, build, and run in one step
+```latex
+\documentclass{article}
+\newcommand{\role}[2]{\textbf{#1} \hfill \textit{#2}}
+\begin{document}
+\section{Experience}
+\role{Software Engineer}{2024 -- Present}
+\begin{itemize}
+\item Built a \href{https://example.com}{LaTeX compiler} in C
+\item Wrapped it in an \textbf{Express} API
+\end{itemize}
+\end{document}
 ```
 
-## Prerequisites
+And get this back (extra blank lines trimmed):
+
+```markdown
+## Experience
+
+**Software Engineer**  —  *2024 -- Present*
+
+-  Built a [LaTeX compiler](https://example.com) in C
+
+-  Wrapped it in an **Express** API
+```
+
+The custom `\role` macro is expanded, the preamble is dropped, and only the document body is emitted.
+
+## Motivation
+
+LaTeX is great for writing documents and terrible for reusing them. Content written in a `.tex` file can't be pasted into a GitHub README, a blog or a web page without rewriting it by hand. TeXdown turns that content into Markdown, and it is built around four principles:
+
+- **Nothing disappears silently.** A command the serializer doesn't recognize is printed as `**[\commandname]** arg1 — arg2` instead of being dropped, so you can always see what wasn't converted.
+- **It always terminates.** Macro expansion is capped at 256 substitutions per run, so a cyclic `\newcommand` prints a warning instead of hanging the process.
+- **Stateless by design.** LaTeX goes in on stdin and Markdown comes out on stdout. The service never touches the disk, so concurrent requests can't step on each other.
+- **Strict C.** The compiler builds under `-std=c99 -Wall -Werror` with no third-party dependencies.
+
+## Quick Start
+
+### Prerequisites
 
 - Node.js 18+
-- A C compiler toolchain (`gcc`, `make`)
+- A C toolchain (`gcc`, `make`)
 
-## Build and run
-
-```bash
-npm install
-npm run build:c    # compiles src/c_compiler/*.c into output/latex_compiler
-npm run build:ts   # type-checks and compiles TypeScript into dist/
-npm run dev         # runs src/server.ts directly with tsx (no dist/ needed)
-```
-
-`npm start` also runs `src/server.ts` directly through `tsx`; the `dist/`
-output from `build:ts` isn't what actually runs. Use `build:ts` for type
-checking, not as a required build step.
-
-Or run everything with one command:
+### 1. Build and start the service
 
 ```bash
+# Clean, install dependencies, compile the C binary and start the server on port 3000
 ./run.sh
 ```
 
-This removes any previous build output, installs dependencies if
-`node_modules` is missing, rebuilds the C binary, confirms
-`output/latex_compiler` exists, and starts the dev server.
+### 2. Convert a document
 
-## Configuration
+```bash
+# Send LaTeX, get Markdown back as JSON
+curl -X POST http://localhost:3000/api/parse \
+  -H "Content-Type: application/json" \
+  -d '{"latexContent": "\\section{Intro}\\textbf{Hello}"}'
+```
 
-| Variable | Description | Default |
-| --- | --- | --- |
-| `PORT` | HTTP server port | `3000` |
-| `C_BINARY_PATH` | Path to the compiled binary | `./output/latex_compiler` |
-| `C_OUTPUT_PATH` | Reserved for future use; the compiler currently returns Markdown over stdout and never reads or writes this path | `./parser_output.md` |
+## Usage
 
-## API
+### Use the compiler without the server
 
-### `POST /api/parse`
+The C binary works on its own as a Unix filter:
 
-**Request**
+```bash
+# Build the binary into output/latex_compiler
+make
+
+# Convert a file
+./output/latex_compiler < resume.tex > resume.md
+```
+
+### API: `POST /api/parse`
+
+**Request body**
 
 ```json
 {
@@ -119,7 +87,7 @@ This removes any previous build output, installs dependencies if
 }
 ```
 
-**Response — 200 OK**
+**200 OK**
 
 ```json
 {
@@ -128,8 +96,7 @@ This removes any previous build output, installs dependencies if
 }
 ```
 
-**Response — 400 Bad Request** (missing `latexContent`) or **500 Internal
-Server Error** (compiler exited non-zero or crashed)
+**400 Bad Request** (missing `latexContent`) or **500 Internal Server Error** (the compiler exited non-zero or crashed):
 
 ```json
 {
@@ -138,20 +105,98 @@ Server Error** (compiler exited non-zero or crashed)
 }
 ```
 
-### Example
+Request bodies can be up to **10 MB**.
 
-```bash
-curl -X POST http://localhost:3000/api/parse \
-  -H "Content-Type: application/json" \
-  -d '{"latexContent": "\\section{Intro}\\textbf{Hello}"}'
+### Supported LaTeX
+
+| LaTeX | Markdown |
+| --- | --- |
+| `\section{}`, `\ressection{}` | `## ` heading |
+| `\subsection{}` | `### ` heading |
+| `\textbf{}` | `**bold**` |
+| `\textit{}` | `*italic*` |
+| `\href{url}{text}` | `[text](url)` |
+| `itemize`, `enumerate` | `- ` list (both render as bullets) |
+| `\\` | hard line break |
+| `\hfill` | em dash |
+| `\vspace`, `\hspace`, `\centering`, `\label` and other layout-only commands | dropped |
+| `\newcommand` (0–9 parameters) | expanded inline |
+
+- Only content inside `\begin{document}...\end{document}` is emitted. If there is no `document` environment, the whole input is converted.
+- `\ressection` behaves like `\section` but **can't be redefined** with `\newcommand`, so a document can't break its own headings while defining other macros.
+
+### Configuration
+
+Set these environment variables before starting the server:
+
+- `PORT` - HTTP port (default `3000`)
+- `C_BINARY_PATH` - path to the compiled binary (default `./output/latex_compiler`)
+- `C_OUTPUT_PATH` - reserved for future use; currently unused (default `./parser_output.md`)
+
+### How it works
+
+```
+HTTP request → Express route → spawn(latex_compiler) → stdout → JSON response
 ```
 
-## Limitations
+Inside the binary, each stage hands its result to the next:
 
-- `enumerate` and `itemize` both render as bare bullet lists; ordered
-  numbering isn't produced.
-- Macro expansion is capped at 256 substitutions per document; a definition
-  that recurses past that limit is left unexpanded rather than causing an
-  infinite loop.
-- Commands the serializer doesn't recognize print with their name and
-  arguments visible rather than being silently dropped or fully rendered.
+1. **Lexer** (`lexer.c`) tokenizes raw LaTeX into commands, braces, brackets and text.
+2. **Parser** (`parser.c`) builds an AST of commands, groups and environments.
+3. **Macro expander** (`expand.c`) resolves `\newcommand` definitions inside the `document` environment.
+4. **Serializer** (`serializer.c`) walks the AST and writes Markdown.
+
+```
+├── include/latex_compiler.h   # shared types for the C compiler
+├── src/
+│   ├── c_compiler/            # main.c, lexer.c, parser.c, expand.c, serializer.c
+│   ├── server.ts              # Express app and /api/parse route
+│   ├── compiler.ts            # spawns the binary and manages its process lifecycle
+│   └── types.ts               # request/response/config types
+├── Makefile
+└── run.sh                     # clean, install, build and run in one step
+```
+
+### Known limitations
+
+- `enumerate` renders as a bullet list; ordered numbering isn't produced yet.
+- Unrecognized commands appear with their name and arguments visible rather than as idiomatic Markdown.
+- Indenting `\item` lines can add stray leading spaces to list items in the output.
+
+## Contributing
+
+### 1. Clone the repo
+
+```bash
+git clone https://github.com/aobwocha/Latex-to-Markdown-Compiler.git
+cd Latex-to-Markdown-Compiler
+```
+
+### 2. Install dependencies
+
+```bash
+npm install
+```
+
+### 3. Build
+
+```bash
+# Compile the C binary into output/latex_compiler
+npm run build:c
+
+# Type-check the TypeScript
+npm run build:ts
+```
+
+### 4. Run the dev server
+
+```bash
+# Runs src/server.ts with tsx and reloads on file changes
+npm run dev
+```
+
+There is no automated test suite yet. To check a change, pipe a `.tex` file through `./output/latex_compiler` or send a request to `/api/parse`.
+
+### 5. Submit a pull request
+
+Fork the repo and open a pull request against the `main` branch.
