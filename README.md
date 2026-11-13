@@ -2,7 +2,13 @@
 
 **TeXdown** is a LaTeX-to-Markdown compiler written in C, with its own lexer, parser, macro expander and serializer, served over HTTP by a TypeScript/Express microservice.
 
-Feed it this:
+<table>
+<tr>
+<th>LaTeX in</th>
+<th>Markdown out (extra blank lines trimmed)</th>
+</tr>
+<tr>
+<td valign="top">
 
 ```latex
 \documentclass{article}
@@ -17,7 +23,8 @@ Feed it this:
 \end{document}
 ```
 
-And get this back (extra blank lines trimmed):
+</td>
+<td valign="top">
 
 ```markdown
 ## Experience
@@ -28,6 +35,10 @@ And get this back (extra blank lines trimmed):
 
 -  Wrapped it in an **Express** API
 ```
+
+</td>
+</tr>
+</table>
 
 The custom `\role` macro is expanded, the preamble is dropped, and only the document body is emitted.
 
