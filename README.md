@@ -33,12 +33,7 @@ The custom `\role` macro is expanded, the preamble is dropped, and only the docu
 
 ## Motivation
 
-LaTeX is great for writing documents and terrible for reusing them. Content written in a `.tex` file can't be pasted into a GitHub README, a blog or a web page without rewriting it by hand. TeXdown turns that content into Markdown, and it is built around four principles:
-
-- **Nothing disappears silently.** A command the serializer doesn't recognize is printed as `**[\commandname]** arg1 — arg2` instead of being dropped, so you can always see what wasn't converted.
-- **It always terminates.** Macro expansion is capped at 256 substitutions per run, so a cyclic `\newcommand` prints a warning instead of hanging the process.
-- **Stateless by design.** LaTeX goes in on stdin and Markdown comes out on stdout. The service never touches the disk, so concurrent requests can't step on each other.
-- **Strict C.** The compiler builds under `-std=c99 -Wall -Werror` with no third-party dependencies.
+I write all my official documents in LaTeX: my resume, cover letters, reports. Nothing else gives me that level of control over how a page looks. But more and more, the first thing I do with a document is hand it to an AI assistant, to tailor my resume to a job posting, tighten a paragraph or summarize a report. Pasting raw `.tex` into a chat didn't work well. The model spent its attention on `\hfill`, `\vspace` and my custom macros instead of the content, and sometimes "fixed" the markup and broke my document. Markdown is what these tools read and write best, but converting by hand meant rewriting every heading, bullet and link, and I had to do it again every time the document changed. So I built **TeXdown**: a compiler that strips the layout noise, expands my macros and gives me clean Markdown in one request. Now my documents stay in LaTeX, where they look right, and every AI tool I use gets a version it can actually work with.
 
 ## Quick Start
 
