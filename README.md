@@ -2,7 +2,13 @@
 
 **TeXdown** is a LaTeX-to-Markdown compiler written in C, with its own lexer, parser, macro expander and serializer, served over HTTP by a TypeScript/Express microservice.
 
-Feed it this:
+<table>
+<tr>
+<th>LaTeX in</th>
+<th>Markdown out (extra blank lines trimmed)</th>
+</tr>
+<tr>
+<td valign="top">
 
 ```latex
 \documentclass{article}
@@ -17,7 +23,8 @@ Feed it this:
 \end{document}
 ```
 
-And get this back (extra blank lines trimmed):
+</td>
+<td valign="top">
 
 ```markdown
 ## Experience
@@ -29,16 +36,15 @@ And get this back (extra blank lines trimmed):
 -  Wrapped it in an **Express** API
 ```
 
+</td>
+</tr>
+</table>
+
 The custom `\role` macro is expanded, the preamble is dropped, and only the document body is emitted.
 
 ## Motivation
 
-LaTeX is great for writing documents and terrible for reusing them. Content written in a `.tex` file can't be pasted into a GitHub README, a blog or a web page without rewriting it by hand. TeXdown turns that content into Markdown, and it is built around four principles:
-
-- **Nothing disappears silently.** A command the serializer doesn't recognize is printed as `**[\commandname]** arg1 — arg2` instead of being dropped, so you can always see what wasn't converted.
-- **It always terminates.** Macro expansion is capped at 256 substitutions per run, so a cyclic `\newcommand` prints a warning instead of hanging the process.
-- **Stateless by design.** LaTeX goes in on stdin and Markdown comes out on stdout. The service never touches the disk, so concurrent requests can't step on each other.
-- **Strict C.** The compiler builds under `-std=c99 -Wall -Werror` with no third-party dependencies.
+I write my official documents in LaTeX, but I edit them more and more with AI assistants. Pasting raw `.tex` into a chat went badly: the model got stuck on layout commands and macros instead of the content. Markdown works far better, but converting by hand every time the document changed was tedious. So I built **TeXdown**, which turns LaTeX into clean Markdown in one request. My documents stay in LaTeX, and my AI tools get a version they can work with.
 
 ## Quick Start
 
